@@ -1,8 +1,10 @@
 use axum::{Router, routing::get};
 
-use crate::controllers::login;
+use crate::controllers::{callback, login};
 
 pub fn get_router() -> axum::Router {
     let router = Router::new();
-    router.route("/", get(login))
+    router
+        .route("/", get(login))
+        .route("/callback", get(callback))
 }
