@@ -1,6 +1,11 @@
-use std::{error::Error, fmt::Display};
+use std::{error::Error, fmt::Display, sync::Arc};
 
-use crate::routes::get_router;
+use crate::{
+    AppSecrets,
+    github::{Github, GithubService},
+    repository::{Postgres, Repository},
+    routes::get_router,
+};
 
 pub struct App {
     pub address: String,
@@ -11,6 +16,12 @@ pub struct App {
 pub enum AppStartError {
     FailedToBind(std::io::Error),
     FailedToStart,
+}
+
+pub struct AppState<T: Github, U: Repository> {
+    pub secrets: &'static AppSecrets,
+    pub github: T,
+    pub repository: U,
 }
 
 impl Display for AppStartError {
@@ -29,12 +40,22 @@ impl App {
         Self { address, port }
     }
 
-    pub async fn run(&self) -> Result<(), AppStartError> {
+    pub async fn run(
+        &self,
+        secrets: &'static AppSecrets,
+        repository: Postgres,
+    ) -> Result<(), AppStartError> {
         let listener = tokio::net::TcpListener::bind(format!("{}:{}", self.address, &self.port))
             .await
             .map_err(AppStartError::FailedToBind)?;
         tracing::info!("App started on {}:{}", self.address, self.port);
-        axum::serve(listener, get_router())
+        let github = GithubService {};
+        let shared_state = Arc::new(AppState {
+            secrets,
+            github,
+            repository,
+        });
+        axum::serve(listener, get_router(shared_state))
             .await
             .map_err(|_| AppStartError::FailedToStart)?;
         Ok(())
