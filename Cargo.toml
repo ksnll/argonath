@@ -9,6 +9,7 @@ axum = { version = "0.8.3", features = ["macros"] }
 axum-extra = { version = "0.10.1", features = ["cookie"] }
 base64 = "0.22.1"
 chrono = { version = "0.4.40", features = ["serde"] }
+mockall = "0.13.1"
 rand = "0.9.1"
 reqwest = { version = "0.12.15", features = ["json"] }
 serde = { version = "1.0.219", features = ["derive"] }

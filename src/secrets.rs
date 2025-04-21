@@ -20,8 +20,8 @@ where
     let encoded = String::deserialize(deserializer)?;
     let bytes = BASE64_STANDARD
         .decode(&encoded)
-        .map_err(|e| de::Error::custom(format!("base64 decode error: {}", e)))?;
-    String::from_utf8(bytes).map_err(|e| de::Error::custom(format!("utf8 error: {}", e)))
+        .map_err(|e| de::Error::custom(format!("Failed to decode secrets: {}", e)))?;
+    String::from_utf8(bytes).map_err(|e| de::Error::custom(format!("Failed to utf8 decode: {}", e)))
 }
 
 const SECRETS: &str = "secrets.yaml";

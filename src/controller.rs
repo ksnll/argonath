@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     github::Github,
-    repository::{CreateSessionRequest, Repository},
+    repository::{CreateSessionRequest, Repository, RepositoryError},
 };
 use askama::Template;
 use axum::{
@@ -16,12 +16,16 @@ use serde::Deserialize;
 use crate::app::AppState;
 
 static CODE_COOKIE_NAME: &str = "code";
-static ACCESS_TOKEN: &str = "access_token";
 static CLIENT_ID: &str = "Iv23li3UZlzZ0kG6gw5s";
 
 #[derive(Debug)]
 pub struct AppError;
 
+impl From<RepositoryError> for AppError {
+    fn from(_: RepositoryError) -> Self {
+        AppError
+    }
+}
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         (
@@ -66,11 +70,14 @@ pub async fn callback<T: Github, U: Repository>(
         .github
         .post_login_oauth_access_token(CLIENT_ID, &params.code, &state.secrets.client_secret)
         .await?;
-    state.repository.create_session(CreateSessionRequest {
-        user_id: 1,
-        access_token: res.access_token,
-        refresh_token: res.refresh_token,
-    });
+    state
+        .repository
+        .create_session(CreateSessionRequest {
+            user_id: 1,
+            access_token: res.access_token,
+            refresh_token: res.refresh_token,
+        })
+        .await?;
 
     Ok(Redirect::temporary("/"))
 }
@@ -83,7 +90,7 @@ mod tests {
         extract::{Query, State},
         response::IntoResponse,
     };
-    use axum_extra::extract::CookieJar;
+    use mockall::predicate::eq;
 
     use crate::{
         AppSecrets,
@@ -91,25 +98,11 @@ mod tests {
         controller::{CallbackParams, callback},
         github::{Github, OauthResponse, UserResponse},
         model::Session,
-        repository::{Repository, RepositoryError},
+        repository::{CreateSessionRequest, MockRepository, Repository, RepositoryError},
     };
 
-    struct RepositoryMock;
-    impl Repository for RepositoryMock {
-        async fn create_session(
-            &self,
-            _: crate::repository::CreateSessionRequest,
-        ) -> Result<crate::model::Session, RepositoryError> {
-            Ok(Session {
-                id: "id".to_string(),
-                user_id: 2,
-                access_token: "access_token".to_string(),
-                refresh_token: "refresh_token".to_string(),
-            })
-        }
-    }
-    struct GithubServiceMock;
-    impl Github for GithubServiceMock {
+    struct MockGithubService;
+    impl Github for MockGithubService {
         async fn post_login_oauth_access_token(
             &self,
             _: &str,
@@ -134,8 +127,8 @@ mod tests {
 
     #[tokio::test]
     async fn callback_sets_cookie_and_redirects() {
-        let github_mock = GithubServiceMock;
-        let repository_mock = RepositoryMock;
+        let github_mock = MockGithubService;
+        let mut repository_mock = MockRepository::new();
         let params = Query(CallbackParams {
             code: "code".to_string(),
         });
@@ -144,6 +137,23 @@ mod tests {
             pg_url: "test_url".to_string(),
         });
         let app_secrets = Box::leak(app_secrets);
+
+        repository_mock
+            .expect_create_session()
+            .with(eq(CreateSessionRequest {
+                user_id: 1,
+                access_token: "access_token".to_string(),
+                refresh_token: "refresh_token".to_string(),
+            }))
+            .returning(|req| {
+                Ok(Session {
+                    id: "id".to_string(),
+                    user_id: req.user_id,
+                    access_token: req.access_token.clone(),
+                    refresh_token: req.refresh_token.clone(),
+                })
+            })
+            .times(1);
 
         let app_state = AppState {
             secrets: app_secrets,

@@ -1,4 +1,7 @@
+use std::{error::Error, fmt::Display};
+
 use crate::{AppSecrets, model::Session};
+use mockall::automock;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 
 pub struct Postgres {
@@ -16,8 +19,18 @@ impl Postgres {
     }
 }
 
-pub struct RepositoryError;
+#[derive(Debug)]
+pub enum RepositoryError {
+    FailedToCreateSessionError,
+}
+impl Display for RepositoryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Failed to create session: Database insert failed")
+    }
+}
+impl Error for RepositoryError {}
 
+#[automock]
 pub trait Repository {
     async fn create_session(
         &self,
@@ -25,6 +38,7 @@ pub trait Repository {
     ) -> Result<Session, RepositoryError>;
 }
 
+#[derive(PartialEq, Debug)]
 pub struct CreateSessionRequest {
     pub user_id: i32,
     pub access_token: String,
@@ -47,6 +61,6 @@ impl Repository for Postgres {
         )
         .fetch_one(&self.pool)
         .await
-        .map_err(|_| RepositoryError)
+        .map_err(|_| RepositoryError::FailedToCreateSessionError)
     }
 }
