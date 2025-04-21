@@ -72,7 +72,7 @@ pub async fn callback<T: Github, U: Repository>(
         .post_login_oauth_access_token(CLIENT_ID, &params.code, &state.secrets.client_secret)
         .await?;
     let user = state.github.get_user(&res.access_token).await?;
-    let user = state.repository.get_or_create_user(&user.email).await?;
+    let user = state.repository.get_or_create_user(&user.login).await?;
     let session = state
         .repository
         .create_session(CreateSessionRequest {
@@ -124,7 +124,7 @@ mod tests {
 
         async fn get_user(&self, _: &str) -> Result<crate::github::UserResponse, super::AppError> {
             Ok(UserResponse {
-                email: "test@email.com".to_owned(),
+                login: "user_login".to_owned(),
             })
         }
     }
@@ -161,12 +161,12 @@ mod tests {
 
         repository_mock
             .expect_get_or_create_user()
-            .with(eq("test@email.com"))
+            .with(eq("user_login"))
             .times(1)
-            .returning(|email| {
+            .returning(|login| {
                 Ok(User {
                     id: 1,
-                    email: email.to_string(),
+                    github_login: login.to_string(),
                 })
             });
 

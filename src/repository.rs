@@ -40,7 +40,7 @@ pub trait Repository {
         &self,
         create_session_request: CreateSessionRequest,
     ) -> Result<Session, RepositoryError>;
-    async fn get_or_create_user(&self, email: &str) -> Result<User, RepositoryError>;
+    async fn get_or_create_user(&self, login: &str) -> Result<User, RepositoryError>;
 }
 
 #[derive(PartialEq, Debug)]
@@ -57,7 +57,7 @@ impl Repository for Postgres {
     ) -> Result<Session, RepositoryError> {
         sqlx::query_as!(
             Session,
-            "INSERT INTO sessions( user_id, access_token, refresh_token) 
+            "INSERT INTO sessions(user_id, access_token, refresh_token) 
             VALUES ($1, $2, $3) 
             RETURNING id, user_id,  access_token, refresh_token",
             create_session_request.user_id,
@@ -68,14 +68,14 @@ impl Repository for Postgres {
         .await
         .map_err(|_| RepositoryError::FailedToCreateSessionError)
     }
-    async fn get_or_create_user(&self, email: &str) -> Result<User, RepositoryError> {
+    async fn get_or_create_user(&self, login: &str) -> Result<User, RepositoryError> {
         sqlx::query_as!(
             User,
-            "INSERT INTO users(email) 
+            "INSERT INTO users(github_login) 
             VALUES ($1) 
-            ON CONFLICT DO NOTHING
-            RETURNING id, email",
-            email,
+            ON CONFLICT(github_login) DO UPDATE SET email = EXCLUDED.email
+            RETURNING id, github_login",
+            login,
         )
         .fetch_one(&self.pool)
         .await

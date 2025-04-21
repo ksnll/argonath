@@ -13,7 +13,7 @@ pub struct OauthResponse {
 
 #[derive(Deserialize, Debug)]
 pub struct UserResponse {
-    pub email: String,
+    pub login: String,
 }
 
 pub trait Github {
@@ -52,6 +52,7 @@ impl Github for GithubService {
             .get("https://api.github.com/user")
             .header("Authorization", format!("Bearer {access_token}"))
             .header("Accept", "application/json")
+            .header("User-Agent", "Argonath-App")
             .send()
             .await
             .map_err(|_| AppError)?
