@@ -10,12 +10,12 @@ use axum::{
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
 };
-use axum_extra::extract::CookieJar;
+use axum_extra::extract::{CookieJar, cookie::Cookie};
 use serde::Deserialize;
 
 use crate::app::AppState;
 
-static CODE_COOKIE_NAME: &str = "code";
+static SESSION_COOKIE: &str = "session";
 static CLIENT_ID: &str = "Iv23li3UZlzZ0kG6gw5s";
 
 #[derive(Debug)]
@@ -40,14 +40,14 @@ impl IntoResponse for AppError {
 #[template(path = "login.html")]
 struct LoginTemplate {
     title: String,
-    access_token: Option<String>,
+    session: Option<String>,
     client_id: &'static str,
 }
 
 pub async fn login(jar: CookieJar) -> Html<String> {
     let login_template = LoginTemplate {
         title: "Login".to_string(),
-        access_token: jar.get(CODE_COOKIE_NAME).map(|x| x.to_string()),
+        session: jar.get(SESSION_COOKIE).map(|x| x.to_string()),
         client_id: CLIENT_ID,
     };
     Html(
@@ -64,22 +64,28 @@ pub struct CallbackParams {
 
 pub async fn callback<T: Github, U: Repository>(
     params: Query<CallbackParams>,
+    jar: CookieJar,
     State(state): State<Arc<AppState<T, U>>>,
-) -> Result<Redirect, AppError> {
+) -> Result<(CookieJar, Redirect), AppError> {
     let res = state
         .github
         .post_login_oauth_access_token(CLIENT_ID, &params.code, &state.secrets.client_secret)
         .await?;
-    state
+    let user = state.github.get_user(&res.access_token).await?;
+    let user = state.repository.get_or_create_user(&user.email).await?;
+    let session = state
         .repository
         .create_session(CreateSessionRequest {
-            user_id: 1,
+            user_id: user.id,
             access_token: res.access_token,
             refresh_token: res.refresh_token,
         })
         .await?;
 
-    Ok(Redirect::temporary("/"))
+    Ok((
+        jar.add(Cookie::new(SESSION_COOKIE, session.id)),
+        Redirect::temporary("/"),
+    ))
 }
 
 #[cfg(test)]
@@ -90,15 +96,16 @@ mod tests {
         extract::{Query, State},
         response::IntoResponse,
     };
+    use axum_extra::extract::CookieJar;
     use mockall::predicate::eq;
 
     use crate::{
         AppSecrets,
         app::AppState,
-        controller::{CallbackParams, callback},
+        controller::{CallbackParams, SESSION_COOKIE, callback},
         github::{Github, OauthResponse, UserResponse},
-        model::Session,
-        repository::{CreateSessionRequest, MockRepository, Repository, RepositoryError},
+        model::{Session, User},
+        repository::{CreateSessionRequest, MockRepository},
     };
 
     struct MockGithubService;
@@ -115,10 +122,7 @@ mod tests {
             })
         }
 
-        async fn get_user(
-            &self,
-            _: String,
-        ) -> Result<crate::github::UserResponse, super::AppError> {
+        async fn get_user(&self, _: &str) -> Result<crate::github::UserResponse, super::AppError> {
             Ok(UserResponse {
                 email: "test@email.com".to_owned(),
             })
@@ -155,13 +159,27 @@ mod tests {
             })
             .times(1);
 
+        repository_mock
+            .expect_get_or_create_user()
+            .with(eq("test@email.com"))
+            .times(1)
+            .returning(|email| {
+                Ok(User {
+                    id: 1,
+                    email: email.to_string(),
+                })
+            });
+
         let app_state = AppState {
             secrets: app_secrets,
             github: github_mock,
             repository: repository_mock,
         };
-        let redirect = callback(params, State(Arc::new(app_state))).await.unwrap();
+        let (jar, redirect) = callback(params, CookieJar::new(), State(Arc::new(app_state)))
+            .await
+            .unwrap();
 
+        assert_eq!(jar.get(SESSION_COOKIE).unwrap().value(), "id");
         assert_eq!(
             redirect
                 .into_response()

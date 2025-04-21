@@ -23,7 +23,7 @@ pub trait Github {
         code: &str,
         client_secret: &str,
     ) -> Result<OauthResponse, AppError>;
-    async fn get_user(&self, access_token: String) -> Result<UserResponse, AppError>;
+    async fn get_user(&self, access_token: &str) -> Result<UserResponse, AppError>;
 }
 
 impl Github for GithubService {
@@ -46,7 +46,7 @@ impl Github for GithubService {
             .map_err(|_| AppError)
     }
 
-    async fn get_user(&self, access_token: String) -> Result<UserResponse, AppError> {
+    async fn get_user(&self, access_token: &str) -> Result<UserResponse, AppError> {
         let client = reqwest::Client::new();
         client
             .get("https://api.github.com/user")

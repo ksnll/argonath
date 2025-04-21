@@ -1,6 +1,9 @@
 use std::{error::Error, fmt::Display};
 
-use crate::{AppSecrets, model::Session};
+use crate::{
+    AppSecrets,
+    model::{Session, User},
+};
 use mockall::automock;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 
@@ -22,6 +25,7 @@ impl Postgres {
 #[derive(Debug)]
 pub enum RepositoryError {
     FailedToCreateSessionError,
+    FailedToCreateUserError,
 }
 impl Display for RepositoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -36,6 +40,7 @@ pub trait Repository {
         &self,
         create_session_request: CreateSessionRequest,
     ) -> Result<Session, RepositoryError>;
+    async fn get_or_create_user(&self, email: &str) -> Result<User, RepositoryError>;
 }
 
 #[derive(PartialEq, Debug)]
@@ -62,5 +67,18 @@ impl Repository for Postgres {
         .fetch_one(&self.pool)
         .await
         .map_err(|_| RepositoryError::FailedToCreateSessionError)
+    }
+    async fn get_or_create_user(&self, email: &str) -> Result<User, RepositoryError> {
+        sqlx::query_as!(
+            User,
+            "INSERT INTO users(email) 
+            VALUES ($1) 
+            ON CONFLICT DO NOTHING
+            RETURNING id, email",
+            email,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|_| RepositoryError::FailedToCreateUserError)
     }
 }
