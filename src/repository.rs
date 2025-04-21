@@ -5,7 +5,7 @@ use crate::{
     model::{Session, User},
 };
 use mockall::automock;
-use sqlx::{PgPool, postgres::PgPoolOptions};
+use sqlx::{PgPool, postgres::PgPoolOptions, types::Uuid};
 
 pub struct Postgres {
     pool: PgPool,
@@ -41,6 +41,7 @@ pub trait Repository {
         create_session_request: CreateSessionRequest,
     ) -> Result<Session, RepositoryError>;
     async fn get_or_create_user(&self, login: &str) -> Result<User, RepositoryError>;
+    async fn get_session(&self, session_id: Uuid) -> Result<Option<Session>, RepositoryError>;
 }
 
 #[derive(PartialEq, Debug)]
@@ -80,5 +81,17 @@ impl Repository for Postgres {
         .fetch_one(&self.pool)
         .await
         .map_err(|_| RepositoryError::FailedToCreateUserError)
+    }
+    async fn get_session(&self, session_id: Uuid) -> Result<Option<Session>, RepositoryError> {
+        sqlx::query_as!(
+            Session,
+            "SELECT id, user_id, access_token, refresh_token
+            FROM sessions
+            WHERE id = $1",
+            session_id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| RepositoryError::FailedToCreateSessionError)
     }
 }

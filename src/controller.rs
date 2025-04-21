@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     github::Github,
+    model::Session,
     repository::{CreateSessionRequest, Repository, RepositoryError},
 };
 use askama::Template;
@@ -12,6 +13,7 @@ use axum::{
 };
 use axum_extra::extract::{CookieJar, cookie::Cookie};
 use serde::Deserialize;
+use sqlx::types::Uuid;
 
 use crate::app::AppState;
 
@@ -40,21 +42,39 @@ impl IntoResponse for AppError {
 #[template(path = "login.html")]
 struct LoginTemplate {
     title: String,
-    session: Option<String>,
+    session: Option<Session>,
     client_id: &'static str,
 }
 
-pub async fn login(jar: CookieJar) -> Html<String> {
+pub async fn login<T: Github, U: Repository>(
+    jar: CookieJar,
+
+    State(state): State<Arc<AppState<T, U>>>,
+) -> Result<Html<String>, AppError> {
+    let session_id = jar
+        .get(SESSION_COOKIE)
+        .map(|x| Uuid::parse_str(x.value()))
+        .transpose()
+        .map_err(|_| AppError)?;
+
+    dbg!(session_id);
+    let session = if let Some(id) = session_id {
+        state.repository.get_session(id).await?
+    } else {
+        None
+    };
+    dbg!(&session);
+
     let login_template = LoginTemplate {
         title: "Login".to_string(),
-        session: jar.get(SESSION_COOKIE).map(|x| x.to_string()),
+        session,
         client_id: CLIENT_ID,
     };
-    Html(
+    Ok(Html(
         login_template
             .render()
             .expect("Failed to render login template"),
-    )
+    ))
 }
 
 #[derive(Deserialize)]
@@ -110,6 +130,9 @@ mod tests {
 
     struct MockGithubService;
     impl Github for MockGithubService {
+        fn new() -> MockGithubService {
+            MockGithubService {}
+        }
         async fn post_login_oauth_access_token(
             &self,
             _: &str,

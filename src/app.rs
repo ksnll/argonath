@@ -49,7 +49,7 @@ impl App {
             .await
             .map_err(AppStartError::FailedToBind)?;
         tracing::info!("App started on {}:{}", self.address, self.port);
-        let github = GithubService {};
+        let github = GithubService::new();
         let shared_state = Arc::new(AppState {
             secrets,
             github,
