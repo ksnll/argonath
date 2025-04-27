@@ -4,6 +4,7 @@ use crate::{
     AppSecrets,
     model::{Session, User},
 };
+use chrono::{DateTime, Utc};
 use mockall::automock;
 use sqlx::{PgPool, postgres::PgPoolOptions, types::Uuid};
 
@@ -50,6 +51,7 @@ pub struct CreateSessionRequest {
     pub user_id: i32,
     pub access_token: String,
     pub refresh_token: String,
+    pub expires_at: DateTime<Utc>,
 }
 
 #[async_trait::async_trait]

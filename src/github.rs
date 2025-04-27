@@ -18,6 +18,7 @@ pub struct GithubService {
 pub struct OauthResponse {
     pub access_token: String,
     pub refresh_token: String,
+    pub expires_in: i64,
 }
 
 #[derive(Deserialize, Debug)]

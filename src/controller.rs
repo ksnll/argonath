@@ -14,6 +14,7 @@ use axum::{
     response::{Html, IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::{CookieJar, cookie::Cookie};
+use chrono::{TimeDelta, Utc};
 use serde::Deserialize;
 use sqlx::types::Uuid;
 
@@ -73,14 +74,20 @@ pub async fn callback<T: Github, U: Repository>(
         .github
         .post_login_oauth_access_token(CLIENT_ID, &params.code, &state.secrets.client_secret)
         .await?;
-    let user = state.github.get_user(&res.access_token).await?;
-    let user = state.repository.get_or_create_user(&user.login).await?;
+    let github_user = state.github.get_user(&res.access_token).await?;
+    let user = state
+        .repository
+        .get_or_create_user(&github_user.login)
+        .await?;
     let session = state
         .repository
         .create_session(CreateSessionRequest {
             user_id: user.id,
             access_token: res.access_token,
             refresh_token: res.refresh_token,
+            expires_at: Utc::now()
+                .checked_add_signed(TimeDelta::seconds(res.expires_in))
+                .expect("Failed to add time"),
         })
         .await?;
     Ok((

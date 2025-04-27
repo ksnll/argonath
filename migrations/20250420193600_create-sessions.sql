@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     access_token TEXT NOT NULL,
-    refresh_token TEXT NOT NULL
+    refresh_token TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS sessions_user_id_index ON sessions (user_id);
