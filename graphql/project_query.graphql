@@ -1,0 +1,39 @@
+query ProjectsQuery($org: String!, $id: Int!, $first: Int!, $after: String) {
+  organization(login: $org) {
+    projectV2(number: $id) {
+      items(
+        first: $first
+        orderBy: { field: POSITION, direction: DESC }
+        after: $after
+      ) {
+        totalCount
+        pageInfo {
+          endCursor
+          hasNextPage
+        }
+        nodes {
+          content {
+            __typename
+            ... on Issue {
+              title
+              number
+              url
+              author {
+                __typename
+                login
+                avatarUrl
+              }
+              createdAt
+            }
+          }
+          taskType: fieldValueByName(name: "Task type") {
+            __typename
+            ... on ProjectV2ItemFieldSingleSelectValue {
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+}

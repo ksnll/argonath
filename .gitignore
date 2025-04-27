@@ -1,3 +1,4 @@
 /target
 secrets.yaml
 .env
+.DS_Store

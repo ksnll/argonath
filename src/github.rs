@@ -29,6 +29,7 @@ pub struct UserResponse {
 pub struct Item {
     pub title: String,
     pub author: String,
+    pub url: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -115,48 +116,59 @@ impl Github for GithubService {
         id: u32,
         access_token: &str,
     ) -> Result<Vec<Item>, AppError> {
-        let request_body = ProjectsQuery::build_query(projects_query::Variables {
-            after: None,
-            id: id.into(),
-            org,
-        });
-
-        let res = self
-            .client
-            .post(GITHUB_GRAPHQL_URL)
-            .header("Authorization", format!("Bearer {access_token}"))
-            .json(&request_body)
-            .send()
-            .await
-            .map_err(|_| AppError)?;
-        let response_body: Response<projects_query::ResponseData> =
-            res.json().await.map_err(|_| AppError)?;
-
-        let items = response_body
-            .data
-            .and_then(|data| data.organization)
-            .and_then(|organization| organization.project_v2)
-            .and_then(|project| project.items.nodes)
-            .unwrap_or_default();
-
+        let mut has_next_page = true;
         let mut unmapped_items = vec![];
-        for item in items.iter().flatten() {
-            if item.task_type.is_none() {
-                let Some(
-                    projects_query::ProjectsQueryOrganizationProjectV2ItemsNodesContent::Issue(
-                        issue,
-                    ),
-                ) = item.content.as_ref()
-                else {
-                    continue;
-                };
-                let Some(author) = issue.author.as_ref() else {
-                    continue;
-                };
-                unmapped_items.push(Item {
-                    title: issue.title.clone(),
-                    author: author.login.clone(),
-                });
+        static FETCH_AMOUNT: i64 = 100;
+        let mut end_cursor = None;
+        while has_next_page {
+            let request_body = ProjectsQuery::build_query(projects_query::Variables {
+                after: end_cursor.clone(),
+                id: id.into(),
+                org: org.clone(),
+                first: FETCH_AMOUNT,
+            });
+
+            let res = self
+                .client
+                .post(GITHUB_GRAPHQL_URL)
+                .header("Authorization", format!("Bearer {access_token}"))
+                .json(&request_body)
+                .send()
+                .await
+                .map_err(|_| AppError)?;
+            let response_body: Response<projects_query::ResponseData> =
+                res.json().await.map_err(|_| AppError)?;
+
+            let items = response_body
+                .data
+                .and_then(|data| data.organization)
+                .and_then(|organization| organization.project_v2)
+                .and_then(|project| {
+                    end_cursor = project.items.page_info.end_cursor;
+                    has_next_page = project.items.page_info.has_next_page;
+                    project.items.nodes
+                })
+                .unwrap_or_default();
+
+            for item in items.iter().flatten() {
+                if item.task_type.is_none() {
+                    let Some(
+                        projects_query::ProjectsQueryOrganizationProjectV2ItemsNodesContent::Issue(
+                            issue,
+                        ),
+                    ) = item.content.as_ref()
+                    else {
+                        continue;
+                    };
+                    let Some(author) = issue.author.as_ref() else {
+                        continue;
+                    };
+                    unmapped_items.push(Item {
+                        title: issue.title.clone(),
+                        author: author.login.clone(),
+                        url: issue.url.clone(),
+                    });
+                }
             }
         }
         Ok(unmapped_items)
