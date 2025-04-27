@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 askama = { version = "0.13.1", features = ["serde_json"] }
+async-trait = "0.1.88"
 axum = { version = "0.8.3", features = ["macros"] }
 axum-extra = { version = "0.10.1", features = ["cookie"] }
 base64 = "0.22.1"

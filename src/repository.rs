@@ -35,7 +35,8 @@ impl Display for RepositoryError {
 impl Error for RepositoryError {}
 
 #[automock]
-pub trait Repository {
+#[async_trait::async_trait]
+pub trait Repository: Send + Sync {
     async fn create_session(
         &self,
         create_session_request: CreateSessionRequest,
@@ -51,6 +52,7 @@ pub struct CreateSessionRequest {
     pub refresh_token: String,
 }
 
+#[async_trait::async_trait]
 impl Repository for Postgres {
     async fn create_session(
         &self,

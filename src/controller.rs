@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+    extractors::ExtractSession,
     github::{Github, Item},
     model::Session,
     repository::{CreateSessionRequest, Repository, RepositoryError},
@@ -18,7 +19,7 @@ use sqlx::types::Uuid;
 
 use crate::app::AppState;
 
-static SESSION_COOKIE: &str = "session";
+pub static SESSION_COOKIE: &str = "session";
 static CLIENT_ID: &str = "Iv23li3UZlzZ0kG6gw5s";
 
 #[derive(Debug)]
@@ -43,30 +44,12 @@ impl IntoResponse for AppError {
 #[template(path = "login.html")]
 struct LoginTemplate {
     title: String,
-    session: Option<Session>,
     client_id: &'static str,
 }
 
-pub async fn login<T: Github, U: Repository>(
-    jar: CookieJar,
-
-    State(state): State<Arc<AppState<T, U>>>,
-) -> Result<Html<String>, AppError> {
-    let session_id = jar
-        .get(SESSION_COOKIE)
-        .map(|x| Uuid::parse_str(x.value()))
-        .transpose()
-        .map_err(|_| AppError)?;
-
-    let session = if let Some(id) = session_id {
-        state.repository.get_session(id).await?
-    } else {
-        None
-    };
-
+pub async fn login() -> Result<Html<String>, AppError> {
     let login_template = LoginTemplate {
         title: "Login".to_string(),
-        session,
         client_id: CLIENT_ID,
     };
     Ok(Html(
@@ -108,29 +91,14 @@ pub async fn callback<T: Github, U: Repository>(
 
 pub async fn get_unmapped_items<T: Github, U: Repository>(
     Path((org, project_id)): Path<(String, u32)>,
-    jar: CookieJar,
+    ExtractSession(session): ExtractSession,
     State(state): State<Arc<AppState<T, U>>>,
 ) -> Result<Json<Vec<Item>>, AppError> {
-    let session_id = jar
-        .get(SESSION_COOKIE)
-        .map(|x| Uuid::parse_str(x.value()))
-        .transpose()
-        .map_err(|_| AppError)?;
-
-    if let Some(id) = session_id {
-        let session = state
-            .repository
-            .get_session(id)
-            .await?
-            .expect("Failed to fetch session");
-        let projects = state
-            .github
-            .get_unmapped_items(org, project_id, &session.access_token)
-            .await?;
-        Ok(Json(projects))
-    } else {
-        Err(AppError)
-    }
+    let projects = state
+        .github
+        .get_unmapped_items(org, project_id, &session.access_token)
+        .await?;
+    Ok(Json(projects))
 }
 
 #[cfg(test)]
@@ -178,9 +146,9 @@ mod tests {
 
         async fn get_unmapped_items(
             &self,
-            org: String,
-            id: u32,
-            access_token: &str,
+            _org: String,
+            _id: u32,
+            _access_token: &str,
         ) -> Result<Vec<crate::github::Item>, super::AppError> {
             todo!()
         }

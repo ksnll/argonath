@@ -1,3 +1,3 @@
 {% extends "base.html" %} {% block content %}
-  {% if session.is_some() %}Logged in {% else %}<a href="https://github.com/login/oauth/authorize?client_id={{ client_id }}">Login to Github</div>{% endif %}
+  <a href="https://github.com/login/oauth/authorize?client_id={{ client_id }}">Login to Github</div>
 {% endblock %}

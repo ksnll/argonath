@@ -6,6 +6,7 @@ use serde::Deserialize;
 
 mod app;
 mod controller;
+mod extractors;
 mod github;
 mod model;
 mod repository;
