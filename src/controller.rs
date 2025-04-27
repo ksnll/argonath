@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
 use crate::{
-    github::Github,
+    github::{Github, Item},
     model::Session,
     repository::{CreateSessionRequest, Repository, RepositoryError},
 };
 use askama::Template;
 use axum::{
-    extract::{Query, State},
+    Json,
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
 };
@@ -57,13 +58,11 @@ pub async fn login<T: Github, U: Repository>(
         .transpose()
         .map_err(|_| AppError)?;
 
-    dbg!(session_id);
     let session = if let Some(id) = session_id {
         state.repository.get_session(id).await?
     } else {
         None
     };
-    dbg!(&session);
 
     let login_template = LoginTemplate {
         title: "Login".to_string(),
@@ -101,11 +100,37 @@ pub async fn callback<T: Github, U: Repository>(
             refresh_token: res.refresh_token,
         })
         .await?;
-
     Ok((
         jar.add(Cookie::new(SESSION_COOKIE, session.id)),
         Redirect::temporary("/"),
     ))
+}
+
+pub async fn get_unmapped_items<T: Github, U: Repository>(
+    Path((org, project_id)): Path<(String, u32)>,
+    jar: CookieJar,
+    State(state): State<Arc<AppState<T, U>>>,
+) -> Result<Json<Vec<Item>>, AppError> {
+    let session_id = jar
+        .get(SESSION_COOKIE)
+        .map(|x| Uuid::parse_str(x.value()))
+        .transpose()
+        .map_err(|_| AppError)?;
+
+    if let Some(id) = session_id {
+        let session = state
+            .repository
+            .get_session(id)
+            .await?
+            .expect("Failed to fetch session");
+        let projects = state
+            .github
+            .get_unmapped_items(org, project_id, &session.access_token)
+            .await?;
+        Ok(Json(projects))
+    } else {
+        Err(AppError)
+    }
 }
 
 #[cfg(test)]
@@ -149,6 +174,15 @@ mod tests {
             Ok(UserResponse {
                 login: "user_login".to_owned(),
             })
+        }
+
+        async fn get_unmapped_items(
+            &self,
+            org: String,
+            id: u32,
+            access_token: &str,
+        ) -> Result<Vec<crate::github::Item>, super::AppError> {
+            todo!()
         }
     }
 
