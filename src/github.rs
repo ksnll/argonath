@@ -1,10 +1,8 @@
-use std::any::Any;
-
-use chrono::{DateTime as ChronoDateTime, Utc};
 use graphql_client::{GraphQLQuery, Response};
 use reqwest::header;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sqlx::types::chrono::{DateTime as ChronoDateTime, Utc};
 
 use crate::controller::AppError;
 

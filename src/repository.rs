@@ -2,9 +2,9 @@ use std::{error::Error, fmt::Display};
 
 use crate::{
     AppSecrets,
+    github::DateTime,
     model::{Session, User},
 };
-use chrono::{DateTime, Utc};
 use mockall::automock;
 use sqlx::{PgPool, postgres::PgPoolOptions, types::Uuid};
 
@@ -51,7 +51,7 @@ pub struct CreateSessionRequest {
     pub user_id: i32,
     pub access_token: String,
     pub refresh_token: String,
-    pub expires_at: DateTime<Utc>,
+    pub expires_at: DateTime,
 }
 
 #[async_trait::async_trait]
@@ -62,12 +62,13 @@ impl Repository for Postgres {
     ) -> Result<Session, RepositoryError> {
         sqlx::query_as!(
             Session,
-            "INSERT INTO sessions(user_id, access_token, refresh_token) 
-            VALUES ($1, $2, $3) 
-            RETURNING id, user_id,  access_token, refresh_token",
+            "INSERT INTO sessions(user_id, access_token, refresh_token, expires_at) 
+            VALUES ($1, $2, $3, $4) 
+            RETURNING id, user_id,  access_token, refresh_token, expires_at",
             create_session_request.user_id,
             create_session_request.access_token,
-            create_session_request.refresh_token
+            create_session_request.refresh_token,
+            create_session_request.expires_at
         )
         .fetch_one(&self.pool)
         .await
@@ -89,7 +90,7 @@ impl Repository for Postgres {
     async fn get_session(&self, session_id: Uuid) -> Result<Option<Session>, RepositoryError> {
         sqlx::query_as!(
             Session,
-            "SELECT id, user_id, access_token, refresh_token
+            "SELECT id, user_id, access_token, refresh_token, expires_at
             FROM sessions
             WHERE id = $1",
             session_id

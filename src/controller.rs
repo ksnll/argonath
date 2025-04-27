@@ -79,15 +79,17 @@ pub async fn callback<T: Github, U: Repository>(
         .repository
         .get_or_create_user(&github_user.login)
         .await?;
+    let expires_at = Utc::now()
+        .checked_add_signed(TimeDelta::seconds(res.expires_in))
+        .expect("Failed to add time");
+
     let session = state
         .repository
         .create_session(CreateSessionRequest {
             user_id: user.id,
             access_token: res.access_token,
             refresh_token: res.refresh_token,
-            expires_at: Utc::now()
-                .checked_add_signed(TimeDelta::seconds(res.expires_in))
-                .expect("Failed to add time"),
+            expires_at,
         })
         .await?;
     Ok((

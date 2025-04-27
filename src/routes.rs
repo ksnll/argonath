@@ -12,7 +12,7 @@ use crate::{
 pub fn get_router(shared_state: Arc<AppState<GithubService, Postgres>>) -> axum::Router {
     let router = Router::new();
     router
-        .route("/", get(login))
+        .route("/login", get(login))
         .route("/callback", get(callback))
         .route("/org/{org}/project/{id}", get(get_unmapped_items))
         .with_state(shared_state)

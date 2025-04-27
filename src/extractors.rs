@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use axum::{extract::FromRequestParts, http::request::Parts, response::Redirect};
 use axum_extra::extract::CookieJar;
+use chrono::Utc;
 use sqlx::types::Uuid;
 
 use crate::{
@@ -36,6 +37,9 @@ where
             .await
             .map_err(|_| Redirect::temporary("/login"))?
             .ok_or(Redirect::temporary("/login"))?;
+        if session.expires_at > Utc::now() {
+            return Err(Redirect::temporary("/login"));
+        }
         Ok(ExtractSession(session))
     }
 }
